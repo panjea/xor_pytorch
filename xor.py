@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys, torch
+import os, sys, torch, json
 import numpy as np
 from collections import OrderedDict
 from matplotlib import pyplot as mp
@@ -30,6 +30,17 @@ fig = mp.figure(figsize=(4,4))
 ax3d = mp.axes(projection='3d')
 mp.ion()
 
+
+def log(msg, msg2=None, msg3=None):
+	try:
+		sys.stderr.write( 'AI: ' + str(msg) + '\n' )
+		if msg2 is not None:
+			sys.stderr.write( '	' + str(msg2) + '\n' )
+		if msg3 is not None:
+			sys.stderr.write( '	' + str(msg3) + '\n' )
+		sys.stderr.flush()
+	except:
+		pass
 
 class XORData(object):
 	"""a class for the generation of XOR validation and training data
@@ -152,7 +163,7 @@ class XOR(object):
 			if save:
 				fmt = save + '{:0' + str(len(str(nbatch))) + '}'
 				mp.savefig(fmt.format(ibatch))
-			print('{:<8} {:.4e}'.format(ibatch,epsilonsum/batchsize))
+			log('{:<8} {:.4e}'.format(ibatch,epsilonsum/batchsize))
 
 	def test(self):
 		"""print the truth table evaluated by self.net:"""
@@ -164,8 +175,11 @@ class XOR(object):
 				ep = epsilon.data[0]
 			except IndexError:
 				ep = epsilon.data.item()
-			print('{} {:+.8f} {:+.8f}'.format(
+			log('{} {:+.8f} {:+.8f}'.format(
 				(int(a),int(b)),y.data[0],ep))
+
+	def think(self, a, b):
+		return self.net(Variable(FloatTensor([a,b]))).data[0]
 
 	def splot(self,nticks=51):
 		"""surface plot of the xor outputs of
@@ -222,9 +236,9 @@ def make_new_net():
 	t0 = XORData.TABLE0
 	t1 = XORData.TABLE1
 
-	print(state0_dict)
-	print(state1_dict)
-	print(state_dict)
+	log(state0_dict)
+	log(state1_dict)
+	log(state_dict)
 
 	xor = XOR()
 	xor.net.load_state_dict(state_dict)
@@ -237,13 +251,21 @@ def make_new_net():
 	torch.save(xor.net.state_dict(), NET_PATH)
 	return xor
 
+def read_loop(xor):
+	while True:
+		msg = sys.stdin.readline()
+		#log(msg)
+		msg = json.loads(msg)
+		res = xor.think( msg['x'], msg['y'] )
+		print('{"result":%s}' % float(res))
+		sys.stdout.flush()
 
 def main():
 	if not os.path.isfile(NET_PATH):
-		print("MAKE NEW NET")
+		log("MAKE NEW NET")
 		xor = make_new_net()
 	else:
-		print("LOADING NET:", NET_PATH)
+		log("LOADING NET:", NET_PATH)
 		xor = XOR()
 		if CUDA:
 			xor.net.load_state_dict(torch.load(NET_PATH, map_location="cuda:0"))
@@ -251,7 +273,7 @@ def main():
 		else:
 			xor.net.load_state_dict(torch.load(NET_PATH))
 	if PIPE:
-		pass
+		read_loop(xor)
 	else:
 		xor.test()
 
