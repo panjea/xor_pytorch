@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import os, sys, torch
 import numpy as np
 from collections import OrderedDict
 from matplotlib import pyplot as mp
@@ -10,6 +10,21 @@ from torch.nn.parameter import Parameter
 from torch import FloatTensor
 from torch.autograd import Variable
 
+NET_PATH = '/tmp/xor.mat'
+PIPE = False
+CUDA = False
+for arg in sys.argv:
+	if arg.endswith('.mat'):
+		NET_PATH = arg
+	elif arg == 'pipe':
+		PIPE = True
+	elif arg == 'cuda':
+		CUDA = True
+
+if CUDA:
+	device = torch.device("cuda")
+else:
+	device = torch.device("cpu")
 
 fig = mp.figure(figsize=(4,4))
 ax3d = mp.axes(projection='3d')
@@ -59,6 +74,8 @@ class XORData(object):
 		dataset = table + deltas
 		dataset.shape = (batchsize*n,3)
 		return dataset
+
+## https://www.programmersought.com/article/49704897475/
 
 
 class XORNet(nn.Module):
@@ -143,8 +160,12 @@ class XOR(object):
 			y = self.net(Variable(FloatTensor([a,b])))
 			target = Variable(FloatTensor([xor]))
 			epsilon = self.loss(y,target)
+			try:
+				ep = epsilon.data[0]
+			except IndexError:
+				ep = epsilon.data.item()
 			print('{} {:+.8f} {:+.8f}'.format(
-				(int(a),int(b)),y.data[0],epsilon.data[0]))
+				(int(a),int(b)),y.data[0],ep))
 
 	def splot(self,nticks=51):
 		"""surface plot of the xor outputs of
@@ -174,21 +195,7 @@ class XOR(object):
 			])
 
 
-if __name__ == "__main__":
-
-	import sys
-	import doctest
-
-	def docscript(obj=None):
-		"""usage: exec(docscript())"""
-		doc = __doc__
-		if obj is not None:
-			doc = obj.__doc__
-		return doctest.script_from_examples(doc)
-
-	if sys.argv[0] == "": # if python is in an emacs buffer:
-		print(doctest.testmod(optionflags=doctest.REPORT_ONLY_FIRST_FAILURE))
-
+def make_new_net():
 	state0_dict = OrderedDict((
 		('fc0.weight',FloatTensor([[20,-20],[20,-20]])),
 		('fc0.bias',FloatTensor([-15,15])),
@@ -226,3 +233,28 @@ if __name__ == "__main__":
 	xor.net.load_state_dict(state_dict) # reset the start state
 	# training for solution 1
 	xor.training(nbatch=25,delta=0.2,table=XORData.TABLE1,save='t1')
+
+	torch.save(xor.net.state_dict(), NET_PATH)
+	return xor
+
+
+def main():
+	if not os.path.isfile(NET_PATH):
+		print("MAKE NEW NET")
+		xor = make_new_net()
+	else:
+		print("LOADING NET:", NET_PATH)
+		xor = XOR()
+		if CUDA:
+			xor.net.load_state_dict(torch.load(NET_PATH, map_location="cuda:0"))
+			xor.net.to(device)
+		else:
+			xor.net.load_state_dict(torch.load(NET_PATH))
+	if PIPE:
+		pass
+	else:
+		xor.test()
+
+if __name__ == "__main__":
+	main()
+
