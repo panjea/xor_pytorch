@@ -160,7 +160,7 @@ class XOR(object):
 				epsilon.backward()
 				self.optim.step()
 			self.splot()
-			if save:
+			if save and not PIPE:
 				fmt = save + '{:0' + str(len(str(nbatch))) + '}'
 				mp.savefig(fmt.format(ibatch))
 			log('{:<8} {:.4e}'.format(ibatch,epsilonsum/batchsize))
